@@ -1,0 +1,12 @@
+[package]
+name = "fama11y-tree"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+atspi = { git = "https://github.com/odilia-app/atspi.git", branch = "main", features = ["proxies-tokio"] }
+display_tree = "1"
+futures = { version = "0.3", features = ["compat"] }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["full"] }
+zbus = "4"
