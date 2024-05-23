@@ -1,8 +1,9 @@
 use atspi::{
+    connection::set_session_accessibility,
     proxy::accessible::{AccessibleProxy, ObjectRefExt},
     AccessibilityConnection, Role,
 };
-use display_tree::{format_tree, AsTree, DisplayTree, Style};
+use display_tree::{AsTree, DisplayTree, Style};
 use zbus::proxy::CacheProperties;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -12,46 +13,52 @@ const REGISTRY_PATH: &str = "/org/a11y/atspi/accessible/root";
 const REGISTRY_INTERFACE: &str = "org.a11y.atspi.Accessible";
 
 #[derive(Debug)]
-struct Children(Vec<A11yNode>);
+struct A11yNode {
+    role: Role,
+    children: Vec<A11yNode>,
+}
 
-impl Children {
-    fn new(children: Vec<A11yNode>) -> Self {
-        Children(children)
+impl DisplayTree for A11yNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter, style: Style) -> std::fmt::Result {
+        self.fmt_with(f, style, &mut vec![])
     }
 }
 
-impl DisplayTree for Children {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, style: Style) -> std::fmt::Result {
-        let idx_last = self.0.len() - 1;
-        // each child but the last child with connector, last is printed with an end_connector.
-        for (idx, child) in self.0.iter().enumerate() {
-            let connector = if idx == idx_last {
-                style.char_set.end_connector
-            } else {
-                style.char_set.connector
-            };
-
-            write!(
-                f,
-                "{}{} {}",
-                connector,
-                std::iter::repeat(style.char_set.horizontal)
-                    .take(style.indentation as usize)
-                    .collect::<String>(),
-                format_tree!(*child, style)
-            )?;
+impl A11yNode {
+    fn fmt_with(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        style: Style,
+        prefix: &mut Vec<bool>,
+    ) -> std::fmt::Result {
+        for (i, is_last_at_i) in prefix.iter().enumerate() {
+            // if it is the last portion of the line
+            let is_last = i == prefix.len() - 1;
+            match (is_last, *is_last_at_i) {
+                (true, true) => write!(f, "{}", style.char_set.end_connector)?,
+                (true, false) => write!(f, "{}", style.char_set.connector)?,
+                // four spaces to emulate `tree`
+                (false, true) => write!(f, "    ")?,
+                // three spaces and vertical char
+                (false, false) => write!(f, "{}   ", style.char_set.vertical)?,
+            }
         }
+
+        // two horizontal chars to mimic `tree`
+        writeln!(
+            f,
+            "{}{} {}",
+            style.char_set.horizontal, style.char_set.horizontal, self.role
+        )?;
+
+        for (i, child) in self.children.iter().enumerate() {
+            prefix.push(i == self.children.len() - 1);
+            child.fmt_with(f, style, prefix)?;
+            prefix.pop();
+        }
+
         Ok(())
     }
-}
-
-#[derive(Debug, DisplayTree)]
-struct A11yNode {
-    #[node_label]
-    role: Role,
-
-    #[tree]
-    children: Children,
 }
 
 impl A11yNode {
@@ -86,8 +93,6 @@ impl A11yNode {
             .filter_map(|child| child.ok())
             .collect::<Vec<_>>();
 
-        let children = Children::new(children);
-
         Ok(A11yNode { role, children })
     }
 }
@@ -106,7 +111,7 @@ async fn get_registry_accessible<'a>(conn: &zbus::Connection) -> Result<Accessib
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // set_session_accessibility(true).await?;
+    set_session_accessibility(true).await?;
     let a11y = AccessibilityConnection::new().await?;
 
     let conn = a11y.connection();
