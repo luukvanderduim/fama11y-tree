@@ -1,10 +1,10 @@
 use atspi::{
     connection::set_session_accessibility,
     proxy::accessible::{AccessibleProxy, ObjectRefExt},
+    zbus::{proxy::CacheProperties, Connection},
     AccessibilityConnection, Role,
 };
 use display_tree::{AsTree, DisplayTree, Style};
-use zbus::proxy::CacheProperties;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -97,7 +97,7 @@ impl A11yNode {
     }
 }
 
-async fn get_registry_accessible<'a>(conn: &zbus::Connection) -> Result<AccessibleProxy<'a>> {
+async fn get_registry_accessible<'a>(conn: &Connection) -> Result<AccessibleProxy<'a>> {
     let registry = AccessibleProxy::builder(conn)
         .destination(REGISTRY_DEST)?
         .path(REGISTRY_PATH)?

@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-atspi = { git = "https://github.com/odilia-app/atspi.git", branch = "main", features = ["proxies-tokio"] }
+futures = { version = "0.3", default-features = false }
+atspi = { git = "https://github.com/odilia-app/atspi.git", branch = "main", default-features = false, features = ["proxies-tokio", "tokio", "zbus"] }
 display_tree = "1"
-futures = { version = "0.3", features = ["compat"] }
-tokio = { version = "1", features = ["full"] }
-tokio-stream = { version = "0.1", features = ["full"] }
-zbus = "4"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
