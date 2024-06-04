@@ -1,10 +1,11 @@
 [package]
 name = "fama11y-tree"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
+rust-version = "1.75.0"
 
 [dependencies]
 futures = { version = "0.3", default-features = false }
-atspi = { git = "https://github.com/odilia-app/atspi.git", branch = "main", default-features = false, features = ["proxies-tokio", "tokio", "zbus"] }
+atspi = { git = "https://github.com/odilia-app/atspi.git", branch = "into_accessible_proxy", default-features = false, features = ["proxies-tokio", "tokio", "zbus"] }
 display_tree = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
