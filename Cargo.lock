@@ -146,7 +146,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 [[package]]
 name = "atspi"
 version = "0.22.0"
-source = "git+https://github.com/odilia-app/atspi.git?branch=into_accessible_proxy#8f5f63446446026bae3a48e3ed14b3ad8534ff9d"
+source = "git+https://github.com/odilia-app/atspi.git?branch=into_accessible_proxy#2c9137cca164e86cac47b77b371889bcd0e31016"
 dependencies = [
  "atspi-common",
  "atspi-connection",
@@ -157,7 +157,7 @@ dependencies = [
 [[package]]
 name = "atspi-common"
 version = "0.6.0"
-source = "git+https://github.com/odilia-app/atspi.git?branch=into_accessible_proxy#8f5f63446446026bae3a48e3ed14b3ad8534ff9d"
+source = "git+https://github.com/odilia-app/atspi.git?branch=into_accessible_proxy#2c9137cca164e86cac47b77b371889bcd0e31016"
 dependencies = [
  "enumflags2",
  "serde",
@@ -172,7 +172,7 @@ dependencies = [
 [[package]]
 name = "atspi-connection"
 version = "0.6.0"
-source = "git+https://github.com/odilia-app/atspi.git?branch=into_accessible_proxy#8f5f63446446026bae3a48e3ed14b3ad8534ff9d"
+source = "git+https://github.com/odilia-app/atspi.git?branch=into_accessible_proxy#2c9137cca164e86cac47b77b371889bcd0e31016"
 dependencies = [
  "atspi-common",
  "atspi-proxies",
@@ -183,7 +183,7 @@ dependencies = [
 [[package]]
 name = "atspi-proxies"
 version = "0.6.0"
-source = "git+https://github.com/odilia-app/atspi.git?branch=into_accessible_proxy#8f5f63446446026bae3a48e3ed14b3ad8534ff9d"
+source = "git+https://github.com/odilia-app/atspi.git?branch=into_accessible_proxy#2c9137cca164e86cac47b77b371889bcd0e31016"
 dependencies = [
  "atspi-common",
  "serde",
@@ -395,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "fama11y-tree"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "atspi",
  "display_tree",

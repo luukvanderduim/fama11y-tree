@@ -108,13 +108,6 @@ impl A11yNode {
 
         // If the stack has an `AccessibleProxy`, we take the last.
         while let Some(ap) = stack.pop() {
-            // 1. Get children for the stack's top `AccessibleProxy`.
-            // 2. Get a `Vec<Role>`s for those children.
-            // 3. Extend the stack with the children `AccessibleProxy`'s.
-            // 4. Create 'children', a `Vec<A11yNode>` from roles.
-            // 5. Create an `A11yNode` from the `AccessibleProxy` and `children`.
-            // 6. Push the `A11yNode` to the `nodes` vector.
-
             let child_objects = ap.get_children().await?;
             let mut children_proxies = try_join_all(
                 child_objects
@@ -149,7 +142,7 @@ impl A11yNode {
             // If the node has children, we fold in the children from 'fold_stack'.
             // There may be more on 'fold_stack' than the node requires.
             let begin = fold_stack.len().saturating_sub(node.children.len());
-            node.children = fold_stack.drain(begin..).collect();
+            node.children = fold_stack.split_off(begin);
             fold_stack.push(node);
         }
 

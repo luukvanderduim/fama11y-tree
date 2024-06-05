@@ -2,7 +2,7 @@
 
 An example on how to build a tree of all objects using [atspi](https://github.com/odilia-app/atspi).
 
-```
+```Text
      Root
      ├── Child1
      │   ├── Grandchild1
@@ -65,4 +65,16 @@ Error: MethodError(OwnedErrorName("org.freedesktop.DBus.Error.UnknownMethod"), S
 
 ### LibreOffice Calc
 
-LibreOffice Calc succeeds in halting
+It appears LibreOffice Calc exposes 2^31 accessible objects (for the table cells), which leads to an ~~interesting~~ impractical and probably impossible situation.
+
+If fama11y-tree calls `GetChildren` on the `Accessible` interface of their parent frame, it will try and send them all.
+
+We can gather ~7000 objects/s (as observed above), 2^31 objects would take about 3 days and 14 hours.
+Aside from the practical downside (we can't cache the table on behalf of screen-readers), it is also illegal
+to send a D-Bus message larger than 128 megabytes.
+
+Needless to say that this is not the user experience AT-SPI2 users would like.
+
+In practical sense, one would like only those cells exposed which are visible.
+
+[Related bug: 156657](https://bugs.documentfoundation.org/show_bug.cgi?id=156657)
