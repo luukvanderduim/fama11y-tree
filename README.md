@@ -65,16 +65,18 @@ Error: MethodError(OwnedErrorName("org.freedesktop.DBus.Error.UnknownMethod"), S
 
 ### LibreOffice Calc
 
-It appears LibreOffice Calc exposes 2^31 accessible objects (for the table cells), which leads to an ~~interesting~~ impractical and probably impossible situation.
+It appears LibreOffice Calc exposes 2^31 accessible objects (the table cells), which leads to an  impractical and impossible situation.
 
-If fama11y-tree calls `GetChildren` on the `Accessible` interface of their parent frame, it will try and send them all.
+When fama11y-tree calls `GetChildren` on the `Accessible` interface of their parent's frame, Calc will try and send them all. Which results in Calc freezing.
 
-We can gather ~7000 objects/s (as observed above), 2^31 objects would take about 3 days and 14 hours.
-Aside from the practical downside (we can't cache the table on behalf of screen-readers), it is also illegal
-to send a D-Bus message larger than 128 megabytes.
+Not sure what is going on, maybe Calc tries to gather data to construct a reply message containing all children which - even if it succeeds at that - it would not send a message that size because D-Bus protocol prohibits sending messages exceeding 128 megabyte.
 
-Needless to say that this is not the user experience AT-SPI2 users would like.
+The problems:
 
-In practical sense, one would like only those cells exposed which are visible.
+- Calc unresponsive and the accessible technology waits indefinitely for a reply.
+- eg. A screen-readers' cache could never handle a list of children that large.
+- D-Bus messages are not allowed to exceed 128 megabytes.
+
+Exposing a subset, eg. exposing 'visible cells' only could make this more practical  and sending the reply feasible.
 
 [Related bug: 156657](https://bugs.documentfoundation.org/show_bug.cgi?id=156657)
