@@ -63,6 +63,48 @@ impl A11yNode {
     }
 }
 
+async fn inspect(ap: AccessibleProxy<'_>) -> Result<()> {
+    println!("Inspecting object with high child count");
+
+    let role = ap.get_role().await?;
+    let description = ap.description().await?;
+    let name = ap.name().await?;
+    let child_count = ap.child_count().await?;
+    let interfaces = ap.get_interfaces().await?;
+
+    let first_child = ap.get_child_at_index(0).await?;
+    let size_of_object = std::mem::size_of_val(&first_child);
+
+    let size = size_of_object * child_count as usize;
+    // size in human readable format
+    let size = if size < 1024 {
+        format!("{} B", size)
+    } else if size < 1024 * 1024 {
+        format!("{:.2} KB", size as f64 / 1024.0)
+    } else if size < 1024 * 1024 * 1024 {
+        format!("{:.2} MB", size as f64 / (1024.0 * 1024.0))
+    } else {
+        format!("{:.2} GB", size as f64 / (1024.0 * 1024.0 * 1024.0))
+    };
+
+    let app_object = ap.get_application().await?;
+    let app_ap = app_object
+        .as_accessible_proxy(ap.inner().connection())
+        .await?;
+    let app_name = app_ap.name().await?;
+    let app_role = app_ap.get_role().await?;
+
+    println!("Object: name: \"{name}\", role: \"{role}\", description: \"{description}\"",);
+    println!("Interfaces: \"{:?}\"", interfaces);
+    println!(
+        "child_count: {child_count}, ObjectRef size: {size_of_object}, collection size: {size},",
+    );
+
+    println!("Application: name: {app_name}, role: {app_role}");
+
+    Ok(())
+}
+
 impl A11yNode {
     fn count_nodes_iterative(&self) -> usize {
         let mut count = 1;
@@ -78,6 +120,10 @@ impl A11yNode {
 
     async fn from_accessible_proxy_recursive(ap: AccessibleProxy<'_>) -> Result<A11yNode> {
         let connection = ap.inner().connection();
+        if ap.child_count().await? > 100_000 {
+            inspect(ap).await?;
+            return Err("Child count is too high".into());
+        }
         let child_objects = ap.get_children().await?;
         let role = ap.get_role().await?;
 
@@ -108,6 +154,10 @@ impl A11yNode {
 
         // If the stack has an `AccessibleProxy`, we take the last.
         while let Some(ap) = stack.pop() {
+            if ap.child_count().await? > 100_000 {
+                inspect(ap).await?;
+                return Err("Child count is too high".into());
+            }
             let child_objects = ap.get_children().await?;
             let mut children_proxies = try_join_all(
                 child_objects
