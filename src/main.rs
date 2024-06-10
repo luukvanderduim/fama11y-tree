@@ -118,31 +118,31 @@ impl A11yNode {
         count
     }
 
-    async fn from_accessible_proxy_recursive(ap: AccessibleProxy<'_>) -> Result<A11yNode> {
-        let connection = ap.inner().connection();
-        if ap.child_count().await? > 100_000 {
-            inspect(ap).await?;
-            return Err("Child count is too high".into());
-        }
-        let child_objects = ap.get_children().await?;
-        let role = ap.get_role().await?;
+    // async fn from_accessible_proxy_recursive(ap: AccessibleProxy<'_>) -> Result<A11yNode> {
+    //     let connection = ap.inner().connection();
+    //     if ap.child_count().await? > 100_000 {
+    //         inspect(ap).await?;
+    //         return Err("Child count is too high".into());
+    //     }
+    //     let child_objects = ap.get_children().await?;
+    //     let role = ap.get_role().await?;
 
-        let child_proxies = try_join_all(
-            child_objects
-                .iter()
-                .map(|child| child.as_accessible_proxy(connection)),
-        )
-        .await?;
+    //     let child_proxies = try_join_all(
+    //         child_objects
+    //             .iter()
+    //             .map(|child| child.as_accessible_proxy(connection)),
+    //     )
+    //     .await?;
 
-        let children = try_join_all(
-            child_proxies
-                .into_iter()
-                .map(|child| Box::pin(A11yNode::from_accessible_proxy_recursive(child))),
-        )
-        .await?;
+    //     let children = try_join_all(
+    //         child_proxies
+    //             .into_iter()
+    //             .map(|child| Box::pin(A11yNode::from_accessible_proxy_recursive(child))),
+    //     )
+    //     .await?;
 
-        Ok(A11yNode { role, children })
-    }
+    //     Ok(A11yNode { role, children })
+    // }
 
     async fn from_accessible_proxy_iterative(ap: AccessibleProxy<'_>) -> Result<A11yNode> {
         let connection = ap.inner().connection().clone();
@@ -232,22 +232,21 @@ async fn main() -> Result<()> {
 
     println!("Construct a tree of accessible objects on the a11y-bus (recursive method)\n");
 
-    let now = std::time::Instant::now();
-    let tree2 = A11yNode::from_accessible_proxy_recursive(registry).await?;
-    let elapsed_recursive = now.elapsed();
+    // let now = std::time::Instant::now();
+    // let tree2 = A11yNode::from_accessible_proxy_recursive(registry).await?;
+    // let elapsed_recursive = now.elapsed();
 
-    println!("| Applications | Nodes | Recursive (ms)| Iterative (ms)|");
-    println!("|--------------|-------|---------------|---------------|");
+    println!("| Applications | Nodes | Iterative (ms)|");
+    println!("|--------------|-------|---------------|");
     println!(
-        "| {:<12} | {:<5} | {:<12}  | {:<13} |",
+        "| {:<12} | {:<5} | {:<13} |",
         no_applications,
         node_count,
-        elapsed_recursive.as_millis(),
         elapsed_iterative.as_millis()
     );
 
-    assert_eq!(tree1, tree2);
-    println!("\nBoth trees are found to be equal\n");
+    // assert_eq!(tree1, tree2);
+    // println!("\nBoth trees are found to be equal\n");
 
     println!("\nPress 'Enter' to print the tree...");
     let _ = std::io::stdin().read_line(&mut String::new());
