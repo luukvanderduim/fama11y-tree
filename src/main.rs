@@ -1,10 +1,13 @@
 use atspi::{
     connection::set_session_accessibility,
-    proxy::accessible::{AccessibleProxy, ObjectRefExt},
+    proxy::{
+        accessible::{AccessibleProxy, ObjectRefExt},
+        component::ComponentProxy,
+    },
     zbus::{proxy::CacheProperties, Connection},
-    AccessibilityConnection, Role,
+    AccessibilityConnection, Interface, Role,
 };
-use display_tree::{AsTree, DisplayTree, Style};
+use display_tree::{DisplayTree, Style};
 use futures::future::try_join_all;
 use std::vec;
 
@@ -13,11 +16,25 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const REGISTRY_DEST: &str = "org.a11y.atspi.Registry";
 const REGISTRY_PATH: &str = "/org/a11y/atspi/accessible/root";
 const ACCESSIBLE_INTERFACE: &str = "org.a11y.atspi.Accessible";
+const COMPONENT_INTERFACE: &str = "org.a11y.atspi.Component";
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct A11yNode {
     role: Role,
+    zorder: i16,
     children: Vec<A11yNode>,
+}
+
+impl PartialOrd for A11yNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.zorder.cmp(&other.zorder))
+    }
+}
+
+impl Ord for A11yNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.zorder.cmp(&other.zorder)
+    }
 }
 
 impl DisplayTree for A11yNode {
@@ -63,122 +80,118 @@ impl A11yNode {
     }
 }
 
-async fn inspect(ap: AccessibleProxy<'_>) -> Result<()> {
-    println!("Inspecting object with high child count");
-
-    let role = ap.get_role().await?;
-    let description = ap.description().await?;
-    let name = ap.name().await?;
-    let child_count = ap.child_count().await?;
-    let interfaces = ap.get_interfaces().await?;
-
-    let first_child = ap.get_child_at_index(0).await?;
-    let size_of_object = std::mem::size_of_val(&first_child);
-
-    let size = size_of_object * child_count as usize;
-    // size in human readable format
-    let size = if size < 1024 {
-        format!("{} B", size)
-    } else if size < 1024 * 1024 {
-        format!("{:.2} KB", size as f64 / 1024.0)
-    } else if size < 1024 * 1024 * 1024 {
-        format!("{:.2} MB", size as f64 / (1024.0 * 1024.0))
-    } else {
-        format!("{:.2} GB", size as f64 / (1024.0 * 1024.0 * 1024.0))
-    };
-
-    let app_object = ap.get_application().await?;
-    let app_ap = app_object
-        .as_accessible_proxy(ap.inner().connection())
-        .await?;
-    let app_name = app_ap.name().await?;
-    let app_role = app_ap.get_role().await?;
-
-    println!("Object: name: \"{name}\", role: \"{role}\", description: \"{description}\"",);
-    println!("Interfaces: \"{:?}\"", interfaces);
-    println!(
-        "child_count: {child_count}, ObjectRef size: {size_of_object}, collection size: {size},",
-    );
-
-    println!("Application: name: {app_name}, role: {app_role}");
-
-    Ok(())
-}
-
 impl A11yNode {
-    fn count_nodes_iterative(&self) -> usize {
-        let mut count = 1;
+    fn as_vec(&self) -> Vec<&A11yNode> {
+        let mut nodes = vec![self];
         let mut stack = vec![self];
 
         while let Some(node) = stack.pop() {
-            count += node.children.len();
             stack.extend(node.children.iter());
+            nodes.extend(node.children.iter());
         }
 
-        count
+        nodes
     }
-
-    // async fn from_accessible_proxy_recursive(ap: AccessibleProxy<'_>) -> Result<A11yNode> {
-    //     let connection = ap.inner().connection();
-    //     if ap.child_count().await? > 100_000 {
-    //         inspect(ap).await?;
-    //         return Err("Child count is too high".into());
-    //     }
-    //     let child_objects = ap.get_children().await?;
-    //     let role = ap.get_role().await?;
-
-    //     let child_proxies = try_join_all(
-    //         child_objects
-    //             .iter()
-    //             .map(|child| child.as_accessible_proxy(connection)),
-    //     )
-    //     .await?;
-
-    //     let children = try_join_all(
-    //         child_proxies
-    //             .into_iter()
-    //             .map(|child| Box::pin(A11yNode::from_accessible_proxy_recursive(child))),
-    //     )
-    //     .await?;
-
-    //     Ok(A11yNode { role, children })
-    // }
 
     async fn from_accessible_proxy_iterative(ap: AccessibleProxy<'_>) -> Result<A11yNode> {
         let connection = ap.inner().connection().clone();
+
         // Contains the processed `A11yNode`'s.
         let mut nodes: Vec<A11yNode> = Vec::new();
-
         // Contains the `AccessibleProxy` yet to be processed.
         let mut stack: Vec<AccessibleProxy> = vec![ap];
 
+        let black_list = ["org.a11y.atspi.Registry", ":1.0"];
+
         // If the stack has an `AccessibleProxy`, we take the last.
         while let Some(ap) = stack.pop() {
-            if ap.child_count().await? > 100_000 {
-                inspect(ap).await?;
-                return Err("Child count is too high".into());
+            let mut has_component = ap.get_interfaces().await?.contains(Interface::Component);
+
+            let bus_name = ap.inner().destination().as_str();
+            if black_list.contains(&bus_name) {
+                has_component = false;
             }
+
             let child_objects = ap.get_children().await?;
             let mut children_proxies = try_join_all(
                 child_objects
-                    .into_iter()
+                    .iter()
+                    .cloned()
                     .map(|child| child.into_accessible_proxy(&connection)),
             )
             .await?;
 
             let roles = try_join_all(children_proxies.iter().map(|child| child.get_role())).await?;
+
+            if !has_component {
+                let children = roles
+                    .into_iter()
+                    .map(|role| A11yNode {
+                        role,
+                        zorder: -1,
+                        children: Vec::new(),
+                    })
+                    .collect();
+
+                let role = ap.get_role().await?;
+
+                nodes.push(A11yNode {
+                    role,
+                    zorder: -1,
+                    children,
+                });
+
+                stack.append(&mut children_proxies);
+                continue;
+            }
+
+            let component_proxies = try_join_all(child_objects.into_iter().map(|child| {
+                ComponentProxy::builder(&connection)
+                    .destination(child.name)
+                    .unwrap()
+                    .path(child.path)
+                    .unwrap()
+                    .interface(COMPONENT_INTERFACE)
+                    .unwrap()
+                    .cache_properties(CacheProperties::No)
+                    .build()
+            }))
+            .await?;
+
+            let orders =
+                try_join_all(component_proxies.iter().map(|child| child.get_mdiz_order())).await?;
+
+            let roles_n_orders = roles.into_iter().zip(orders.into_iter());
+
             stack.append(&mut children_proxies);
 
-            let children = roles
-                .into_iter()
-                .map(|role| A11yNode {
+            let children = roles_n_orders
+                .map(|(role, zorder)| A11yNode {
                     role,
+                    zorder,
                     children: Vec::new(),
                 })
-                .collect::<Vec<_>>();
+                .collect();
 
             let role = ap.get_role().await?;
-            nodes.push(A11yNode { role, children });
+
+            let ap_object: atspi::ObjectRef = ap.try_into()?;
+
+            let component_proxy = ComponentProxy::builder(&connection)
+                .destination(ap_object.name)?
+                .path(ap_object.path)?
+                .interface(COMPONENT_INTERFACE)?
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await?;
+
+            let zorder = component_proxy.get_mdiz_order().await?;
+
+            nodes.push(A11yNode {
+                role,
+                zorder,
+                children,
+            });
         }
 
         let mut fold_stack: Vec<A11yNode> = Vec::with_capacity(nodes.len());
@@ -219,38 +232,17 @@ async fn main() -> Result<()> {
 
     let conn = a11y.connection();
     let registry = get_registry_accessible(conn).await?;
-
-    let no_applications = registry.child_count().await?;
-
-    println!("Construct a tree of accessible objects on the a11y-bus (iterative method)\n");
-
-    let now = std::time::Instant::now();
     let tree1 = A11yNode::from_accessible_proxy_iterative(registry.clone()).await?;
-    let elapsed_iterative = now.elapsed();
 
-    let node_count = tree1.count_nodes_iterative();
+    let mut node_vec = tree1.as_vec();
+    node_vec.sort_unstable();
 
-    println!("Construct a tree of accessible objects on the a11y-bus (recursive method)\n");
-
-    // let now = std::time::Instant::now();
-    // let tree2 = A11yNode::from_accessible_proxy_recursive(registry).await?;
-    // let elapsed_recursive = now.elapsed();
-
-    println!("| Applications | Nodes | Iterative (ms)|");
-    println!("|--------------|-------|---------------|");
-    println!(
-        "| {:<12} | {:<5} | {:<13} |",
-        no_applications,
-        node_count,
-        elapsed_iterative.as_millis()
-    );
-
-    // assert_eq!(tree1, tree2);
-    // println!("\nBoth trees are found to be equal\n");
-
-    println!("\nPress 'Enter' to print the tree...");
-    let _ = std::io::stdin().read_line(&mut String::new());
-    println!("{}", AsTree::new(&tree1));
+    for (idx, node) in node_vec.iter().enumerate() {
+        println!("{}: {}, zorder: {}", idx, node.role, node.zorder);
+        if idx > 100 {
+            break;
+        }
+    }
 
     Ok(())
 }
