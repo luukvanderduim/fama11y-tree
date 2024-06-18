@@ -237,9 +237,10 @@ async fn main() -> Result<()> {
     let mut node_vec = tree1.as_vec();
     node_vec.sort_unstable();
 
-    for (idx, node) in node_vec.iter().enumerate() {
+    println!("Displaying the top 25 zorder nodes in the tree");
+    for (idx, node) in node_vec.iter().rev().enumerate() {
         println!("{}: {}, zorder: {}", idx, node.role, node.zorder);
-        if idx > 100 {
+        if idx > 25 {
             break;
         }
     }
